@@ -492,3 +492,82 @@ func TestEfficiency(t *testing.T) {
 		)
 	}
 }
+
+func TestRangeForming(t *testing.T) {
+	// fill a buffer with random data
+	buf := make([]byte, 16*1024) // 16KB
+	_, err := io.ReadFull(rand.Reader, buf)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// create a reader for the buffer and a BufReaderAt for the reader
+	r := bytes.NewReader([]byte(buf))
+	buffered := New(r, 100, 10)
+
+	// do one big read
+	actual := make([]byte, len(buf))
+	_, err = buffered.ReadAt(actual, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// compare the results
+	if !bytes.Equal(buf, actual) {
+		t.Fatalf("data didn't match")
+	}
+
+	// check the stats
+	_, _, _, underReqs := buffered.Stats()
+	if underReqs != 1 {
+		t.Fatalf(
+			"expected 1 underReqs, got %d",
+			underReqs,
+		)
+	}
+
+	// reset the stats
+	buffered = New(r, 100, 10)
+
+	// do a little read in the middle
+	actual = make([]byte, 100)
+	_, err = buffered.ReadAt(actual, 8*1024)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// compare the results
+	if !bytes.Equal(buf[8*1024:8*1024+100], actual) {
+		t.Fatalf("data didn't match")
+	}
+
+	// check the stats
+	_, _, _, underReqs = buffered.Stats()
+	if underReqs != 1 {
+		t.Fatalf(
+			"expected 1 underReqs, got %d",
+			underReqs,
+		)
+	}
+
+	// read everything
+	actual = make([]byte, len(buf))
+	_, err = buffered.ReadAt(actual, 0)
+	if err != nil {
+		t.Fatal(err)
+	}
+
+	// compare the results
+	if !bytes.Equal(buf, actual) {
+		t.Fatalf("data didn't match")
+	}
+
+	// check the stats
+	_, _, _, underReqs = buffered.Stats()
+	if underReqs != 3 { // 2 new ranges + 1 old range
+		t.Fatalf(
+			"expected 3 underReqs, got %d",
+			underReqs,
+		)
+	}
+}
