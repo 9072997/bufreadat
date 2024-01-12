@@ -4,11 +4,10 @@ import (
 	"io"
 	"sync"
 	"sync/atomic"
-	"time"
 )
 
 type cacheEntry struct {
-	lastAccessed atomic.Value // time.Time
+	lastAccessed atomic.Uint64
 	data         []byte
 }
 
@@ -18,11 +17,15 @@ type ReaderAt struct {
 	numBlocks  int64
 	cache      map[int64]*cacheEntry
 	cacheMutex sync.RWMutex
+	clock      atomic.Uint64
 	// for stats
 	overlayBytes  atomic.Uint64
 	underlayBytes uint64
 	overlayReqs   atomic.Uint64
 	underlayReqs  uint64
+	// for graph
+	fileLen  int64
+	prevLine string
 }
 
 type readRequest struct {
@@ -77,10 +80,10 @@ func (r *ReaderAt) processReadRequest(rr *readRequest) {
 	// evict blocks
 	for numToEvict > 0 {
 		var oldestBlock int64
-		oldestTime := time.Now()
+		oldestTime := r.clock.Load()
 		for block, entry := range r.cache {
-			lastAccessed := entry.lastAccessed.Load().(time.Time)
-			if lastAccessed.Before(oldestTime) {
+			lastAccessed := entry.lastAccessed.Load()
+			if lastAccessed < oldestTime {
 				oldestBlock = block
 				oldestTime = lastAccessed
 			}
@@ -153,7 +156,7 @@ func (r *ReaderAt) processReadRequest(rr *readRequest) {
 	bufferPtr := 0
 	for i := startBlock; i < endBlock; i++ {
 		entry := r.cache[i]
-		entry.lastAccessed.Store(time.Now())
+		entry.lastAccessed.Store(r.clock.Add(1))
 		bufferPtr += copy(rr.buffer[bufferPtr:], entry.data[waste:])
 		waste = 0
 	}
@@ -166,10 +169,10 @@ func (r *ReaderAt) processReadRequest(rr *readRequest) {
 	// we might have over-filled the cache, so evict blocks again
 	for int64(len(r.cache)) > r.numBlocks {
 		var oldestBlock int64
-		oldestTime := time.Now()
+		oldestTime := r.clock.Load()
 		for block, entry := range r.cache {
-			lastAccessed := entry.lastAccessed.Load().(time.Time)
-			if lastAccessed.Before(oldestTime) {
+			lastAccessed := entry.lastAccessed.Load()
+			if lastAccessed < oldestTime {
 				oldestBlock = block
 				oldestTime = lastAccessed
 			}
@@ -198,6 +201,9 @@ func (r *ReaderAt) ReadAt(p []byte, off int64) (n int, err error) {
 		r.cacheMutex.RUnlock()
 		r.cacheMutex.Lock()
 		r.processReadRequest(rr)
+		if r.prevLine != "" {
+			r.drawGraph()
+		}
 		r.cacheMutex.Unlock()
 	}
 
