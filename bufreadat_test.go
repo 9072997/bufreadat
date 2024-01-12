@@ -403,6 +403,7 @@ func TestConcurrency(t *testing.T) {
 	// start a bunch of threads
 	var wg sync.WaitGroup
 	for i := 0; i < 100; i++ {
+		wg.Add(1)
 		go func(i int) {
 			for j := 0; j < 1000; j++ {
 				// pick a random position and length
