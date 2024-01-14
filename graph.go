@@ -165,7 +165,7 @@ func (r *ReaderAt) EnableGraph(fileLen int64) error {
 	fmt.Println()
 	r.prevLine = strings.Repeat(string(emptyBrailleCell), termWidth)
 	r.fileLen = fileLen
-	runtime.SetFinalizer(r.cache, func(_ map[int64]*cacheEntry) {
+	runtime.SetFinalizer(&r.cache, func(_ map[int64]*cacheEntry) {
 		fmt.Println()
 	})
 	return nil
