@@ -3,7 +3,6 @@ package bufreadat
 import (
 	"fmt"
 	"os"
-	"runtime"
 	"strings"
 	"unicode/utf8"
 
@@ -159,14 +158,12 @@ func (r *ReaderAt) EnableGraph(fileLen int64) error {
 	if termWidth <= 0 {
 		return fmt.Errorf("invalid terminal width: %d", termWidth)
 	}
+	fmt.Println()
 	for i := 0; i < termWidth; i++ {
 		fmt.Print("=")
 	}
 	fmt.Println()
 	r.prevLine = strings.Repeat(string(emptyBrailleCell), termWidth)
 	r.fileLen = fileLen
-	runtime.SetFinalizer(&r.cache, func(_ map[int64]*cacheEntry) {
-		fmt.Println()
-	})
 	return nil
 }
