@@ -27,7 +27,9 @@ func (r *ReaderAt) brailleLine() string {
 	}
 
 	blockCount := r.fileLen / r.blockSize
-	if r.fileLen%blockCount != 0 {
+	if blockCount == 0 {
+		blockCount = 1
+	} else if r.fileLen%blockCount != 0 {
 		blockCount++
 	}
 	for i := range r.cache {
